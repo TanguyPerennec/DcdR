@@ -1,0 +1,124 @@
+---
+title: "DcdR"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{DcdR}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+```{r setup}
+library(DcdR)
+```
+
+# Objectif
+ 
+Ce package permet de vérifier les dates de décès de toute personne décédée en France, depuis 1970 jusqu'à 2019.
+Le package nécessitant une constante mise à jour, utiliser `actualise()` ou réinstaller régulièrement la dernière version du package pour avoir les données mises à jour.
+
+**IMPORTANT** : le package, utiliser à l'envers, est aussi capable de retrouver nom exacte de patient à partir de peu de données (1ère lettres du nom et du prénom, date de naissance, etc.) et met donc en lumière le fait que les données pseudo-anonymisées sont en fait identifiantes (voir paragraphe 'ré-identification').
+
+
+
+# Risques de ré-identification
+
+Les données de l'INSEE sont publiques et comportent les informations suivantes :
+- Nom, prénom
+- sexe
+- date de naissance
+- commune de naissance
+- pays de naissance
+- date de décès
+- lieu de décès
+- n° d'acte de dècès
+<br>
+<br>
+Toute base de données comportant, au moins partiellement, certaintes de ces information est donc potentiellement identifiante.
+
+
+
+## Exemples
+
+Sur l'ensemble des décès de 2010 à 2019, voici un exemple test de réidentification sur 10 combinaisons, à partir de la première lettre du nom et la première lettre du prénom, montrant que celle-ci est impossible sur ces simples données. Les résultats sont le nombre d'homonymes trouvées sur la seule information 'initiale du nom' et 'initiale du prénom'.
+
+```{r}
+set.seed(3)
+rslt <- vector()
+N=10
+for (n in seq(N))
+{
+alphabet <- c("a","b","c","d","e","f","g","h","i","j","k","l","m","n","o","p","q","r","s","t","u","v","w","x","y","z")
+sample(x = toupper(alphabet),1) -> letter1
+sample(x = toupper(alphabet),1) -> letter2
+load(paste0('../Data/',letter1,"_deces.rda"))
+eval(parse(text=paste0(letter1,"_deces"))) -> DF
+length(grep(paste0("\\*",letter2),DF$nomprenom)) -> rslt[n]
+}
+rslt
+```
+
+Si on ajoute la date de naissance, les chances de réidentification deviennent réelles :
+
+```{r}
+set.seed(3)
+rslt <- vector()
+N=10
+for (n in seq(N))
+{
+alphabet <- c("a","b","c","d","e","f","g","h","i","j","k","l","m","n","o","p","q","r","s","t","u","v","w","x","y","z")
+sample(x = toupper(alphabet),1) -> letter1
+sample(x = toupper(alphabet),1) -> letter2
+load(paste0('../Data/',letter1,"_deces.rda"))
+eval(parse(text=paste0(letter1,"_deces"))) -> DF
+DF[grep(paste0("\\*",letter2),DF$nomprenom),] -> rslt_grep
+rslt_grep$datenaiss[1] -> DDN_a_tester
+length(grep(DDN_a_tester,rslt_grep$datenaiss)) -> rslt[n]
+}
+rslt
+```
+
+Avec la date de décès : 
+
+```{r}
+set.seed(3)
+rslt <- vector()
+N=10
+for (n in seq(N))
+{
+alphabet <- c("a","b","c","d","e","f","g","h","i","j","k","l","m","n","o","p","q","r","s","t","u","v","w","x","y","z")
+sample(x = toupper(alphabet),1) -> letter1
+sample(x = toupper(alphabet),1) -> letter2
+load(paste0('../Data/',letter1,"_deces.rda"))
+eval(parse(text=paste0(letter1,"_deces"))) -> DF
+DF[grep(paste0("\\*",letter2),DF$nomprenom),] -> rslt_grep
+rslt_grep$datedeces[1] -> DDD_a_tester
+length(grep(DDD_a_tester,rslt_grep$datedeces)) -> rslt[n]
+}
+rslt
+```
+
+Avec la date de naissance et la date de décès, sans aucune autre information sur le nom de famille ou le prénom (ex sur 2018) :
+
+```{r}
+deces.2018 <- fread("~/Desktop/deces-2010-2018-csv/deces-2018.csv")
+sample(seq(nrow(deces.2018)),10)-> vecteur_patient
+n = 0
+rslt <- vector()
+for (i in vecteur_patient)
+{
+  n = n + 1
+  deces.2018[grep(deces.2018$datedeces[i],deces.2018$datedeces)] -> rslt_grep
+  length(grep(rslt_grep$datenaiss[1],rslt_grep$datenaiss)) -> rslt[n]
+}
+rslt
+```
+
+Au total, la présence des initiales des patients, associée à une autre information comme la date de naissance ou de décès, est fortement identifiant. La présence de la date de naissance et de décès (ou équivalent comme l'âge, survie, etc...) sont totalement identifiants.
+De telles informations ne devrait jamais sortir du cadre du soin.
